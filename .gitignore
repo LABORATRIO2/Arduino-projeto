@@ -1,32 +1,172 @@
-# Prerequisites
-*.d
+const int Bomba = 16;
+const int LedVermelho = 18;
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+const int SelonoideT6 = 12;
+const int SelonoideT4 = 10;
+const int SelonoideT5 = 8;
+const int SelonoideT3 = 14;
 
-# Precompiled Headers
-*.gch
-*.pch
+const int Botao = 9;
+const int Alarme = 15;
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
+const int SNACisterna = 7;
+const int SNBCisterna = 6;
+const int SNACaixa = 4;
+const int SNBCaixa = 5;
+const int SNACedae = 17;    //é o pino3 mas mudei para 9 por testes do sensor de fluxo
+const int SNBCedae = 11;  //é o pino2 mas mudei para 11 por testes do sensor de fluxo
 
-# Fortran module files
-*.mod
-*.smod
+int EstadoCisterna;
+int EstadoBotao;
 
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
+const int INTERRUPCAO_SENSOR1 = 1;
+const int INTERRUPCAO_SENSOR2 = 0;
+const int PINO_SENSOR1 = 3;
+const int PINO_SENSOR2 = 2;
 
-# Executables
-*.exe
-*.out
-*.app
+volatile unsigned long contador1 = 0;
+volatile unsigned long contador2 = 0;
+
+void setup() {
+
+pinMode(SNBCaixa, INPUT);
+pinMode(SNACaixa, INPUT);
+pinMode(SNBCedae, INPUT);
+pinMode(SNACedae, INPUT);
+pinMode(SNACisterna, INPUT);
+pinMode(Botao, INPUT_PULLUP);
+
+pinMode(SelonoideT6, OUTPUT);
+pinMode(SelonoideT4, OUTPUT);
+pinMode(SelonoideT5, OUTPUT);
+pinMode(SelonoideT3, OUTPUT);
+pinMode(Alarme, OUTPUT);
+pinMode(Bomba, OUTPUT);
+pinMode(LedVermelho, OUTPUT);
+
+// Removi a linha que imprime "Medidor de Fluxo e Volume de Liquidos\n"
+
+// Removi a linha que configura o pino do sensor como entrada com pull-up
+
+// Removi a linha que anexa a interrupção ao sensor
+
+  
+// Inicializando os pinos de saída desligados (obs: os relés estão programados para funcionar de forma o contrária)
+  
+digitalWrite(SelonoideT6, HIGH);
+digitalWrite(SelonoideT4, HIGH);
+digitalWrite(SelonoideT5, HIGH);
+digitalWrite(SelonoideT3, HIGH);
+digitalWrite(Alarme, HIGH);
+digitalWrite(Bomba, HIGH);
+
+  
+Serial.begin(9600);
+
+// Configurando os pinos dos sensores como entrada com pull-up
+pinMode(PINO_SENSOR1, INPUT_PULLUP);
+pinMode(PINO_SENSOR2, INPUT_PULLUP);
+
+// Anexando as interrupções aos sensores
+attachInterrupt(INTERRUPCAO_SENSOR1, contador_pulso1, FALLING);
+attachInterrupt(INTERRUPCAO_SENSOR2, contador_pulso2, FALLING);
+
+}
+
+
+void loop() {
+// Lendo os valores dos sensores
+int nivelBaixoCaixa = digitalRead(SNBCaixa);
+int nivelAltoCaixa = digitalRead(SNACaixa);
+int nivelAltoCisterna = digitalRead(SNACisterna);
+int nivelBaixoCisterna = digitalRead(SNBCisterna);
+int nivelBaixoCedae = digitalRead(SNBCedae);
+int nivelAltoCedae = digitalRead(SNACedae);
+
+// Controle do sistema da caixa d'água
+if ((nivelBaixoCaixa == HIGH) && (nivelAltoCedae == HIGH || nivelAltoCedae == LOW) && (nivelBaixoCedae == LOW) && (nivelBaixoCisterna == HIGH)) {
+// Liga a bomba, pois a caixa está vazia CEDAE CHEIA CISTERNA VAZIA
+digitalWrite(Bomba, LOW);
+digitalWrite(SelonoideT6, LOW);    }  
+else if (nivelAltoCaixa == LOW) {
+// Desliga a bomba, pois a caixa está cheia
+digitalWrite(Bomba, HIGH); 
+digitalWrite(SelonoideT6, HIGH);     }
+
+//CISTERNA CHEIA E CEDAE VAZIA 
+if ((nivelBaixoCaixa == HIGH) && (nivelAltoCisterna == LOW) && (nivelBaixoCisterna == LOW) && (nivelBaixoCedae == HIGH)) {
+// Liga a bomba e abre a válvula T4 para encher a caixa com água da cisterna
+digitalWrite(Bomba, LOW); 
+digitalWrite(SelonoideT4, LOW);    }
+else if (nivelAltoCaixa == LOW) {
+// Desliga a bomba e fecha a válvula T4
+digitalWrite(Bomba, HIGH); 
+digitalWrite(SelonoideT4, HIGH);     }
+
+//CISTERNA VAZIA E CEDAE CHEIA
+if ((nivelBaixoCaixa == HIGH) && (nivelAltoCisterna == HIGH) && (nivelBaixoCisterna == HIGH) && (nivelAltoCedae == LOW)) {
+// Liga a bomba e abre a válvula T5 para encher a caixa com água da CEDAE
+digitalWrite(Bomba, LOW); 
+digitalWrite(SelonoideT5, LOW);    }
+else if (nivelAltoCaixa == LOW) {
+// Desliga a bomba e fecha a válvula T5
+digitalWrite(Bomba, HIGH); 
+digitalWrite(SelonoideT5, HIGH);     }
+
+//CISTERNA VAZIA E CEDAE VAZIA
+if ((nivelBaixoCaixa == HIGH) && (nivelAltoCisterna == HIGH) && (nivelBaixoCisterna == HIGH) && (nivelBaixoCedae == HIGH)) {
+// Liga o alarme e o led vermelho para indicar que não há água disponível
+digitalWrite(Alarme, LOW); 
+digitalWrite(LedVermelho, LOW);    }
+else if (nivelBaixoCaixa == LOW) {
+// Desliga o alarme e o led vermelho
+digitalWrite(Alarme, HIGH); 
+digitalWrite(LedVermelho, HIGH);     }
+
+// Controle do sistema da cisterna
+if ((nivelBaixoCisterna == HIGH) && (nivelAltoCedae == LOW)) {
+// Abre a válvula T3 para encher a cisterna com água da CEDAE
+digitalWrite(SelonoideT3, LOW);    }
+else if (nivelAltoCisterna == LOW) {
+// Fecha a válvula T3
+digitalWrite(SelonoideT3, HIGH);     }
+
+// Cálculo do volume de água da caixa e da cisterna
+
+float frequencia1 = contador1 / 2.0; // Divide por dois pois o contador conta as bordas de subida e descida
+float frequencia2 = contador2 / 2.0; // Divide por dois pois o contador conta as bordas de subida e descida
+
+float vazao1 = frequencia1 / 7.5; // Q = f / k, onde k = 7.5 para o sensor YF-S201
+float vazao2 = frequencia2 / 7.5; // Q = f / k, onde k = 7.5 para o sensor YF-S201
+
+float volume1 = vazao1 * 0.001; // V = Q * dt, onde dt = 1 segundo e Q está em L/min
+float volume2 = vazao2 * 0.001; // V = Q * dt, onde dt = 1 segundo e Q está em L/min
+
+contador1 = 0; // Zera o contador para o próximo cálculo
+contador2 = 0; // Zera o contador para o próximo cálculo
+
+// Imprime apenas o volume em litros e apenas quando os sensores estiverem sendo usados
+
+if (volume1 > 0) {
+Serial.print("Volume de agua da caixa: ");
+Serial.print(volume1 * 60); // Multiplica por 60 para converter de L/s para L/min
+Serial.println(" L");
+}
+
+if (volume2 > 0) {
+Serial.print("Volume de agua da cisterna: ");
+Serial.print(volume2 * 60); // Multiplica por 60 para converter de L/s para L/min
+Serial.println(" L");
+}
+
+delay(1000); // Aguarda um segundo para o próximo cálculo
+
+}
+
+void contador_pulso1() {
+contador1++; // Incrementa o contador a cada pulso do sensor
+}
+
+void contador_pulso2() {
+contador2++; // Incrementa o contador a cada pulso do sensor
+}
